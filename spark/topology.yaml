@@ -1,0 +1,31 @@
+# Service dependency graph: who calls whom.
+# 'depends_on' = downstream services this service calls.
+# Used to compute upstream-position score and propagation score.
+services:
+  web:
+    depends_on: [auth]
+    upstream_score: 1.0   # closest to user; most suspicious in a cascade
+  auth:
+    depends_on: [db]
+    upstream_score: 0.7
+  db:
+    depends_on: []
+    upstream_score: 0.3   # leaf service; less likely to be the root
+
+# Weights for combining signals into the final score.
+# Must sum to 1.0 for normalized output.
+weights:
+  persistence:    0.20    # how long has it been anomalous
+  upstream:       0.20    # graph position
+  propagation:    0.25    # did downstreams also break
+  magnitude:      0.20    # how far from baseline
+  multi_signal:   0.15    # how many metrics simultaneously off
+
+# Anomaly detection thresholds (per-window)
+thresholds:
+  error_rate_zscore: 2.5      # error rate must be 2.5 stddev above baseline
+  latency_zscore:    2.5
+  throughput_zscore: 2.5
+  min_persistence_windows: 2  # must persist >= 2 consecutive windows
+Install PyYAML on spark-master so we can read this:
+ssh spark-master 'pip3 install pyyaml --break-system-packages'
