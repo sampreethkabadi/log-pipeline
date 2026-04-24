@@ -120,13 +120,13 @@ TEMPLATE = """
 def index():
     records = read_recent_anomalies(limit_files=20)
     valid = [r for r in records if "error" not in r]
-    # Top scored: sort by score desc, take top 30
-    top_scored = sorted(valid, key=lambda x: x.get("score", 0), reverse=True)[:30]
-    # Root candidates: filter and sort by window_start desc
+    # Sort by window_start DESC first, then score DESC
+    top_scored = sorted(valid,
+        key=lambda x: (x.get("window_start", ""), x.get("score", 0)),
+        reverse=True)[:30]
     root_candidates = [r for r in valid if r.get("is_root_cause_candidate")]
     root_candidates.sort(key=lambda x: x.get("window_start", ""), reverse=True)
     root_candidates = root_candidates[:20]
-    print(f"Loaded {len(records)} records, {len(valid)} valid, {len(top_scored)} top scored, {len(root_candidates)} root candidates")
     return render_template_string(
         TEMPLATE,
         top_scored=top_scored,
