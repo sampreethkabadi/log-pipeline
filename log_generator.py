@@ -33,11 +33,33 @@ MESSAGES = {
 LEVELS = ["INFO"] * 85 + ["WARN"] * 10 + ["ERROR"] * 5
 
 # Injection state — set by the injection controller to simulate failures
+INJECTION_FILE = "/tmp/injection_state.json"
 INJECTION_STATE = {
     "web":  {"error_rate_multiplier": 1.0, "latency_multiplier": 1.0},
     "auth": {"error_rate_multiplier": 1.0, "latency_multiplier": 1.0},
     "db":   {"error_rate_multiplier": 1.0, "latency_multiplier": 1.0},
 }
+
+
+def reload_injection_state():
+    """Re-read injection file every 2 seconds in a background thread."""
+    global INJECTION_STATE
+    last_mtime = 0
+    while True:
+        try:
+            import os
+            if os.path.exists(INJECTION_FILE):
+                mt = os.path.getmtime(INJECTION_FILE)
+                if mt != last_mtime:
+                    with open(INJECTION_FILE) as f:
+                        new_state = json.load(f)
+                    INJECTION_STATE.update(new_state)
+                    last_mtime = mt
+                    print(f"[injection] Reloaded: {INJECTION_STATE}")
+        except Exception as e:
+            print(f"[injection] reload error: {e}")
+        time.sleep(2)
+
 
 
 def make_record(service):
@@ -121,7 +143,7 @@ def main():
 
     print(f"Generator starting. Total rate: {args.rate}/s "
           f"({per_service_rate}/s per service). Broker: {args.broker}")
-
+    threading.Thread(target=reload_injection_state, daemon=True).start()
     # Start 3 threads, one per service
     threads = []
     for service in TOPOLOGY.keys():
