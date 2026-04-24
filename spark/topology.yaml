@@ -27,5 +27,3 @@ thresholds:
   latency_zscore:    2.5
   throughput_zscore: 2.5
   min_persistence_windows: 2  # must persist >= 2 consecutive windows
-Install PyYAML on spark-master so we can read this:
-ssh spark-master 'pip3 install pyyaml --break-system-packages'
