@@ -6,6 +6,7 @@ from hdfs import InsecureClient
 import json
 import os
 from collections import defaultdict
+import subprocess
 
 app = Flask(__name__)
 
@@ -17,19 +18,29 @@ client = InsecureClient(HDFS_URL, user=HDFS_USER)
 
 
 def read_recent_anomalies(limit_files=20):
-    """Read the most recent anomaly JSON files from HDFS."""
+    """Read anomaly files from HDFS using hdfs dfs command."""
     try:
-        files = client.list(ANOMALIES_PATH)
-        # Filter to part- files, sort by name (newest last lexicographically)
-        part_files = sorted([f for f in files if f.startswith("part-")])
-        recent = part_files[-limit_files:]
+        # List files
+        result = subprocess.run(
+            ['hdfs', 'dfs', '-ls', '/logs/anomalies/'],
+            capture_output=True, text=True
+        )
+        lines = [l for l in result.stdout.strip().split('\n') if 'part-' in l]
+        # Get last N files
+        recent_files = [l.split()[-1] for l in lines[-limit_files:]]
+        
         records = []
-        for fname in recent:
-            with client.read(f"{ANOMALIES_PATH}/{fname}") as r:
-                content = r.read().decode("utf-8")
-                for line in content.strip().split("\n"):
-                    if line:
+        for path in recent_files:
+            cat = subprocess.run(
+                ['hdfs', 'dfs', '-cat', path],
+                capture_output=True, text=True
+            )
+            for line in cat.stdout.strip().split('\n'):
+                if line.strip():
+                    try:
                         records.append(json.loads(line))
+                    except:
+                        pass
         return records
     except Exception as e:
         return [{"error": str(e)}]
@@ -115,7 +126,7 @@ def index():
     root_candidates = [r for r in valid if r.get("is_root_cause_candidate")]
     root_candidates.sort(key=lambda x: x.get("window_start", ""), reverse=True)
     root_candidates = root_candidates[:20]
-
+    print(f"Loaded {len(records)} records, {len(valid)} valid, {len(top_scored)} top scored, {len(root_candidates)} root candidates")
     return render_template_string(
         TEMPLATE,
         top_scored=top_scored,
