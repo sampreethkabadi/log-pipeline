@@ -18,17 +18,15 @@ client = InsecureClient(HDFS_URL, user=HDFS_USER)
 
 
 def read_recent_anomalies(limit_files=20):
-    """Read anomaly files from HDFS using hdfs dfs command."""
     try:
-        # List files
         result = subprocess.run(
             ['hdfs', 'dfs', '-ls', '/logs/anomalies/'],
             capture_output=True, text=True
         )
         lines = [l for l in result.stdout.strip().split('\n') if 'part-' in l]
-        # Get last N files
+        # Sort by filename (newest last) and take the last N
+        lines.sort()
         recent_files = [l.split()[-1] for l in lines[-limit_files:]]
-        
         records = []
         for path in recent_files:
             cat = subprocess.run(
