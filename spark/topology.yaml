@@ -14,12 +14,19 @@ services:
 
 # Weights for combining signals into the final score.
 # Must sum to 1.0 for normalized output.
+# weights:
+#   persistence:    0.20    # how long has it been anomalous
+#   upstream:       0.20    # graph position
+#   propagation:    0.25    # did downstreams also break
+#   magnitude:      0.20    # how far from baseline
+#   multi_signal:   0.15    # how many metrics simultaneously off
+
 weights:
-  persistence:    0.20    # how long has it been anomalous
-  upstream:       0.20    # graph position
-  propagation:    0.25    # did downstreams also break
-  magnitude:      0.20    # how far from baseline
-  multi_signal:   0.15    # how many metrics simultaneously off
+  persistence:    0.25
+  upstream:       0.10
+  propagation:    0.20
+  magnitude:      0.35
+  multi_signal:   0.10
 
 # Anomaly detection thresholds (per-window)
 thresholds:
