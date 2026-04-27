@@ -62,6 +62,25 @@ def update_baseline(service, history):
 
 def process_batch(batch_df, batch_id):
     """Called once per micro-batch. Has the windowed stats for this batch."""
+    if batch_id < WARMUP_BATCHES:
+    print(f"[warmup] Batch {batch_id} skipped — building baseline")
+    # Still update history but don't score or write
+    rows = batch_df.collect()
+    for row in rows:
+        if row["service"]:
+            stats = WindowStats(
+                service=row["service"],
+                window_start=str(row["window_start"]),
+                total=row["total"] or 0,
+                errors=row["errors"] or 0,
+                error_rate=float(row["error_rate"] or 0),
+                avg_latency_ms=float(row["avg_latency_ms"] or 0),
+                max_latency_ms=int(row["max_latency_ms"] or 0),
+            )
+            HISTORY[stats.service].append(stats)
+            update_baseline(stats.service, list(HISTORY[stats.service]))
+    return
+
     rows = batch_df.collect()
     if not rows:
         return
