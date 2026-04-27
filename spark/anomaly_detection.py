@@ -152,7 +152,7 @@ def main():
     stats = (parsed
              .withWatermark("event_time", "1 minute")
              .groupBy(
-                 window("event_time", "30 seconds", "10 seconds"),
+                 window("event_time", "20 seconds", "5 seconds"),
                  "service"
              )
              .agg(
@@ -167,7 +167,7 @@ def main():
     query = (stats.writeStream
              .outputMode("update")
              .foreachBatch(process_batch)
-             .trigger(processingTime="10 seconds")
+             .trigger(processingTime="5 seconds")
              .start())
 
     query.awaitTermination()

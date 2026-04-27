@@ -26,4 +26,4 @@ thresholds:
   error_rate_zscore: 2.5      # error rate must be 2.5 stddev above baseline
   latency_zscore:    2.5
   throughput_zscore: 2.5
-  min_persistence_windows: 2  # must persist >= 2 consecutive windows
+  min_persistence_windows: 1  # must persist >= 2 consecutive windows
