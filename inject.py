@@ -9,18 +9,15 @@ Usage:
   python3 inject.py cascade         # full scripted cascade scenario
 """
 
-import json
-import sys
-import time
+#!/usr/bin/env python3
+import json, sys, time, os
 
 INJECTION_FILE = "/tmp/injection_state.json"
-
 
 def write_state(state):
     with open(INJECTION_FILE, "w") as f:
         json.dump(state, f, indent=2)
     print(f"Wrote injection state: {state}")
-
 
 def normal():
     return {
@@ -28,7 +25,6 @@ def normal():
         "auth": {"error_rate_multiplier": 1.0, "latency_multiplier": 1.0},
         "db":   {"error_rate_multiplier": 1.0, "latency_multiplier": 1.0},
     }
-
 
 SCENARIOS = {
     "reset": normal(),
@@ -39,7 +35,7 @@ SCENARIOS = {
     },
     "db-fail": {
         "web":  {"error_rate_multiplier": 1.0, "latency_multiplier": 1.0},
-        "auth": {"error_rate_multiplier": 2.0, "latency_multiplier": 2.0},
+        "auth": {"error_rate_multiplier": 1.0, "latency_multiplier": 1.0},
         "db":   {"error_rate_multiplier": 10.0, "latency_multiplier": 5.0},
     },
     "web-fail": {
@@ -49,18 +45,16 @@ SCENARIOS = {
     },
 }
 
-
 def run_cascade():
-    """Scripted cascade: auth degrades, then propagates."""
     print("Cascade scenario starting...")
-    print("t=0s: auth starts degrading (error_rate 5x, latency 3x)")
+    print("t=0s: auth starts degrading")
     write_state({
         "web":  {"error_rate_multiplier": 1.0, "latency_multiplier": 1.0},
         "auth": {"error_rate_multiplier": 5.0, "latency_multiplier": 3.0},
         "db":   {"error_rate_multiplier": 1.0, "latency_multiplier": 1.0},
     })
     time.sleep(20)
-    print("t=20s: cascade — db starts seeing retry storm, web starts errors")
+    print("t=20s: cascade spreading to web and db")
     write_state({
         "web":  {"error_rate_multiplier": 3.0, "latency_multiplier": 2.0},
         "auth": {"error_rate_multiplier": 8.0, "latency_multiplier": 4.0},
@@ -71,12 +65,10 @@ def run_cascade():
     write_state(normal())
     print("Cascade scenario complete")
 
-
 def main():
     if len(sys.argv) < 2:
-        print(__doc__)
+        print("Usage: python3 inject.py [reset|auth-fail|db-fail|web-fail|cascade]")
         sys.exit(1)
-
     cmd = sys.argv[1]
     if cmd == "cascade":
         run_cascade()
@@ -84,10 +76,7 @@ def main():
         write_state(SCENARIOS[cmd])
     else:
         print(f"Unknown scenario: {cmd}")
-        print(__doc__)
         sys.exit(1)
-
 
 if __name__ == "__main__":
     main()
-
