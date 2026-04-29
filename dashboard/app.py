@@ -2,7 +2,7 @@
 """Minimal Flask dashboard for the log pipeline."""
 
 from flask import Flask, render_template_string, jsonify
-from hdfs import InsecureClient
+# from hdfs import InsecureClient
 import json
 import os
 from collections import defaultdict
@@ -13,23 +13,31 @@ HDFS_URL = "http://spark-master:9870"   # namenode HTTP
 HDFS_USER = os.environ.get("USER", "exouser")
 ANOMALIES_PATH = "/logs/anomalies"
 
-client = InsecureClient(HDFS_URL, user=HDFS_USER)
+# client = InsecureClient(HDFS_URL, user=HDFS_USER)
 
 
 def read_recent_anomalies(limit_files=20):
-    """Read the most recent anomaly JSON files from HDFS."""
+    """Read the most recent anomaly JSON files from HDFS using hdfs dfs command."""
     try:
-        files = client.list(ANOMALIES_PATH)
-        # Filter to part- files, sort by name (newest last lexicographically)
-        part_files = sorted([f for f in files if f.startswith("part-")])
-        recent = part_files[-limit_files:]
+        result = subprocess.run(
+            ['hdfs', 'dfs', '-ls', '/logs/anomalies/'],
+            capture_output=True, text=True
+        )
+        lines = [l for l in result.stdout.strip().split('\n') if 'part-' in l]
+        lines.sort()
+        recent_files = [l.split()[-1] for l in lines[-limit_files:]]
         records = []
-        for fname in recent:
-            with client.read(f"{ANOMALIES_PATH}/{fname}") as r:
-                content = r.read().decode("utf-8")
-                for line in content.strip().split("\n"):
-                    if line:
+        for path in recent_files:
+            cat = subprocess.run(
+                ['hdfs', 'dfs', '-cat', path],
+                capture_output=True, text=True
+            )
+            for line in cat.stdout.strip().split('\n'):
+                if line.strip():
+                    try:
                         records.append(json.loads(line))
+                    except:
+                        pass
         return records
     except Exception as e:
         return [{"error": str(e)}]
