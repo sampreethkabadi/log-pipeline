@@ -3,6 +3,7 @@
 
 from flask import Flask, render_template_string, jsonify
 # from hdfs import InsecureClient
+import subprocess
 import json
 import os
 from collections import defaultdict
