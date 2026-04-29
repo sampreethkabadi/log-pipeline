@@ -18,20 +18,20 @@ ANOMALIES_PATH = "/logs/anomalies"
 
 
 def read_recent_anomalies(limit_files=20):
-    """Read the most recent anomaly JSON files from HDFS using hdfs dfs command."""
     try:
         result = subprocess.run(
-            ['hdfs', 'dfs', '-ls', '/logs/anomalies/'],
-            capture_output=True, text=True
+            ['hdfs', 'dfs', '-ls', '-t', '/logs/anomalies/'],
+            capture_output=True, text=True, timeout=15
         )
         lines = [l for l in result.stdout.strip().split('\n') if 'part-' in l]
-        lines.sort()
-        recent_files = [l.split()[-1] for l in lines[-limit_files:]]
+        # -t flag sorts by modification time, newest first
+        # so we take the FIRST limit_files, not the last
+        recent_files = [l.split()[-1] for l in lines[:limit_files]]
         records = []
         for path in recent_files:
             cat = subprocess.run(
                 ['hdfs', 'dfs', '-cat', path],
-                capture_output=True, text=True
+                capture_output=True, text=True, timeout=5
             )
             for line in cat.stdout.strip().split('\n'):
                 if line.strip():
