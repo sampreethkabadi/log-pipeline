@@ -12,6 +12,7 @@ import time
 import random
 import argparse
 import threading
+import multiprocessing  # ADD THIS
 from datetime import datetime, timezone
 from kafka import KafkaProducer
 
@@ -123,45 +124,79 @@ def run_service(service, producer, rate):
         time.sleep(interval)
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--broker", default="kafka-broker:9092",
-                        help="Kafka bootstrap server")
-    parser.add_argument("--rate", type=int, default=100,
-                        help="Total events/sec across all 3 services")
-    args = parser.parse_args()
-
-    # Split rate across 3 services
-    per_service_rate = max(1, args.rate // 3)
+def run_service_process(service, broker, rate):
+    """Run in a separate process — no GIL, true parallelism."""
+    import json, time, random
+    from datetime import datetime, timezone
+    from kafka import KafkaProducer
 
     producer = KafkaProducer(
-        bootstrap_servers=args.broker,
-        linger_ms=10,           # batch up to 10ms for efficiency
-        batch_size=16384,       # 16KB batches
-        compression_type="gzip" # reduce network load
+        bootstrap_servers=broker,
+        linger_ms=10,
+        batch_size=16384,
+        compression_type="gzip"
     )
 
-    print(f"Generator starting. Total rate: {args.rate}/s "
-          f"({per_service_rate}/s per service). Broker: {args.broker}")
-    threading.Thread(target=reload_injection_state, daemon=True).start()
-    # Start 3 threads, one per service
-    threads = []
+    cfg = TOPOLOGY[service]
+    interval = 1.0 / rate if rate > 0 else 1.0
+    sent = 0
+    last_print = time.time()
+
+    print(f"[{service}] process started at {rate} events/sec -> {cfg['topic']}")
+
+    while True:
+        record = make_record(service)
+        producer.send(cfg["topic"], json.dumps(record).encode("utf-8"))
+        sent += 1
+
+        now = time.time()
+        if now - last_print >= 5:
+            print(f"[{service}] sent {sent} msgs in last 5s = {sent/(now-last_print):.0f}/s")
+            sent = 0
+            last_print = now
+
+        time.sleep(interval)
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--broker", default="kafka-broker:9092")
+    parser.add_argument("--rate", type=int, default=300)
+    args = parser.parse_args()
+
+    per_service_rate = max(1, args.rate // 3)
+
+    print(f"Starting multiprocessing generator.")
+    print(f"Total target rate: {args.rate}/s ({per_service_rate}/s per service)")
+    print(f"Each service runs in its own OS process — no GIL.")
+
+    processes = []
     for service in TOPOLOGY.keys():
-        t = threading.Thread(
-            target=run_service,
-            args=(service, producer, per_service_rate),
+        p = multiprocessing.Process(
+            target=run_service_process,
+            args=(service, args.broker, per_service_rate),
             daemon=True
         )
-        t.start()
-        threads.append(t)
+        p.start()
+        processes.append(p)
+        print(f"[{service}] process PID {p.pid} started")
 
     try:
+        # Also reload injection state in the main process
+        # and share it via a file — workers check every 2 seconds
         while True:
             time.sleep(60)
     except KeyboardInterrupt:
-        print("\nShutting down...")
-        producer.flush()
-        producer.close()
+        print("\nShutting down all processes...")
+        for p in processes:
+            p.terminate()
+        for p in processes:
+            p.join()
+        print("All processes stopped.")
+
+
+if __name__ == "__main__":
+    main()
 
 
 if __name__ == "__main__":
